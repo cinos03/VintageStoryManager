@@ -1,6 +1,7 @@
-FROM mcr.microsoft.com/dotnet/runtime:7.0
+FROM mcr.microsoft.com/dotnet/runtime:10.0
 
 # Vintage Story dedicated server runtime image.
+# VS 1.22.x targets .NET 10 (Microsoft.NETCore.App 10.0.0).
 # The actual game files are downloaded at runtime by entrypoint.sh into the
 # /game volume, keyed by version, so a single image can run any version.
 
