@@ -29,8 +29,8 @@ export interface InstalledMod {
 }
 
 export interface ModSummary {
-  modid: number;
-  assetid?: number;
+  modId: number;
+  assetId?: number;
   name: string;
   summary?: string;
   author?: string;
@@ -38,7 +38,7 @@ export interface ModSummary {
   follows?: number;
   tags?: string[];
   logo?: string;
-  urlalias?: string;
+  urlAlias?: string;
 }
 
 async function req<T>(url: string, options?: RequestInit): Promise<T> {

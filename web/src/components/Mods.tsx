@@ -38,10 +38,10 @@ export function Mods({ status }: { status: ServerStatus | null }) {
   };
 
   const install = async (mod: ModSummary) => {
-    setBusyId(mod.modid);
+    setBusyId(mod.modId);
     setError("");
     try {
-      await api.installMod(mod.modid, gv);
+      await api.installMod(mod.modId, gv);
       loadInstalled();
     } catch (err) {
       setError((err as Error).message);
@@ -125,7 +125,7 @@ export function Mods({ status }: { status: ServerStatus | null }) {
           </form>
           <ul className="mod-list">
             {results.map((m) => (
-              <li key={m.modid}>
+              <li key={m.modId}>
                 <div>
                   <strong>{m.name}</strong>
                   {m.downloads != null && (
@@ -135,10 +135,10 @@ export function Mods({ status }: { status: ServerStatus | null }) {
                 </div>
                 <button
                   className="small"
-                  disabled={busyId === m.modid}
+                  disabled={busyId === m.modId}
                   onClick={() => install(m)}
                 >
-                  {busyId === m.modid ? "Installing…" : "Install"}
+                  {busyId === m.modId ? "Installing…" : "Install"}
                 </button>
               </li>
             ))}
