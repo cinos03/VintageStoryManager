@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type GameVersion, type ServerInfo, type ServerStatus } from "../api";
+import { ConfirmDialog } from "./ConfirmDialog";
 
 const STATE_LABEL: Record<ServerStatus["state"], string> = {
   running: "Running",
@@ -26,6 +27,9 @@ export function Servers({
   const [newVersion, setNewVersion] = useState("");
   const [newPort, setNewPort] = useState("");
   const [creating, setCreating] = useState(false);
+
+  // Server pending deletion confirmation.
+  const [pendingDelete, setPendingDelete] = useState<ServerInfo | null>(null);
 
   useEffect(() => {
     api
@@ -60,12 +64,13 @@ export function Servers({
   };
 
   const remove = async (server: ServerInfo) => {
-    if (
-      !confirm(
-        `Delete "${server.name}"? This stops and removes its container. World data on disk is kept.`
-      )
-    )
-      return;
+    setPendingDelete(server);
+  };
+
+  const confirmDelete = async () => {
+    const server = pendingDelete;
+    setPendingDelete(null);
+    if (!server) return;
     await act(server.id, () => api.servers.remove(server.id));
   };
 
@@ -208,6 +213,17 @@ export function Servers({
           </button>
         </div>
       </form>
+
+      {pendingDelete && (
+        <ConfirmDialog
+          title={`Delete "${pendingDelete.name}"?`}
+          message="This stops and removes its container. World data on disk is kept."
+          confirmLabel="Delete"
+          danger
+          onConfirm={confirmDelete}
+          onCancel={() => setPendingDelete(null)}
+        />
+      )}
     </div>
   );
 }

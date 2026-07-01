@@ -134,6 +134,10 @@ export function Console({ server }: { server: ServerInfo | null }) {
     setError("");
     try {
       await api.console.command(serverId, compose.trim());
+      // Clear the compose bar and any loaded command after a successful send.
+      setCompose("");
+      setSelected(null);
+      setArgs({});
     } catch (e) {
       setError((e as Error).message);
     }

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type InstalledMod, type ModSummary, type ServerInfo } from "../api";
+import { ConfirmDialog } from "./ConfirmDialog";
 
 export function Mods({ server }: { server: ServerInfo | null }) {
   const [installed, setInstalled] = useState<InstalledMod[]>([]);
@@ -9,6 +10,7 @@ export function Mods({ server }: { server: ServerInfo | null }) {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [error, setError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
 
   const serverId = server?.id ?? null;
   const gv = server?.version;
@@ -74,7 +76,13 @@ export function Mods({ server }: { server: ServerInfo | null }) {
 
   const remove = async (file: string) => {
     if (!serverId) return;
-    if (!confirm(`Remove ${file}?`)) return;
+    setPendingDelete(file);
+  };
+
+  const confirmDelete = async () => {
+    const file = pendingDelete;
+    setPendingDelete(null);
+    if (!serverId || !file) return;
     try {
       await api.mods.remove(serverId, file);
       loadInstalled();
@@ -158,6 +166,17 @@ export function Mods({ server }: { server: ServerInfo | null }) {
           </ul>
         </div>
       </div>
+
+      {pendingDelete && (
+        <ConfirmDialog
+          title="Remove mod?"
+          message={`Remove ${pendingDelete}?`}
+          confirmLabel="Remove"
+          danger
+          onConfirm={confirmDelete}
+          onCancel={() => setPendingDelete(null)}
+        />
+      )}
     </div>
   );
 }

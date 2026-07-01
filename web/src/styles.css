@@ -421,3 +421,37 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 }
+
+/* Confirmation modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 6, 10, 0.6);
+  backdrop-filter: blur(2px);
+  display: grid;
+  place-items: center;
+  z-index: 100;
+}
+.modal-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.5rem;
+  width: 400px;
+  max-width: calc(100vw - 2rem);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+.modal-title {
+  margin: 0 0 0.6rem;
+  font-size: 1.05rem;
+}
+.modal-message {
+  margin: 0 0 1.25rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+}
