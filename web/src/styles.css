@@ -306,6 +306,12 @@ button:disabled {
 }
 
 /* Servers tab */
+.servers-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
 .server-cards {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));

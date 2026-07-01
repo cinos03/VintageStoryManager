@@ -27,6 +27,7 @@ export function Servers({
   const [newVersion, setNewVersion] = useState("");
   const [newPort, setNewPort] = useState("");
   const [creating, setCreating] = useState(false);
+  const [showAdd, setShowAdd] = useState(false);
 
   // Server pending deletion confirmation.
   const [pendingDelete, setPendingDelete] = useState<ServerInfo | null>(null);
@@ -74,6 +75,14 @@ export function Servers({
     await act(server.id, () => api.servers.remove(server.id));
   };
 
+  const openAdd = () => {
+    setNewName("");
+    setNewPort("");
+    setNewVersion((v) => v || versions[0]?.version || "");
+    setError("");
+    setShowAdd(true);
+  };
+
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newName.trim() || !newVersion) return;
@@ -89,6 +98,7 @@ export function Servers({
       });
       setNewName("");
       setNewPort("");
+      setShowAdd(false);
       await onChange();
     } catch (err) {
       setError((err as Error).message);
@@ -99,6 +109,11 @@ export function Servers({
 
   return (
     <div className="servers-tab">
+      <div className="servers-head">
+        <h2>Servers</h2>
+        <button onClick={openAdd}>+ Add server</button>
+      </div>
+
       {error && <div className="error">{error}</div>}
 
       <div className="server-cards">
@@ -178,41 +193,62 @@ export function Servers({
         })}
       </div>
 
-      <form className="panel add-server" onSubmit={create}>
-        <h3>Add a server</h3>
-        <div className="add-server-row">
-          <label className="field">
-            Name
-            <input
-              value={newName}
-              placeholder="My Server"
-              onChange={(e) => setNewName(e.target.value)}
-            />
-          </label>
-          <label className="field">
-            Version
-            <select value={newVersion} onChange={(e) => setNewVersion(e.target.value)}>
-              {versions.map((v) => (
-                <option key={`${v.channel}-${v.version}`} value={v.version}>
-                  {v.version} {v.channel === "unstable" ? "(unstable)" : ""}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            Port (optional)
-            <input
-              value={newPort}
-              placeholder="auto"
-              inputMode="numeric"
-              onChange={(e) => setNewPort(e.target.value)}
-            />
-          </label>
-          <button type="submit" disabled={creating || !newName.trim() || !newVersion}>
-            {creating ? "Creating…" : "Create"}
-          </button>
+      {servers.length === 0 && (
+        <div className="muted">No servers yet. Click "+ Add server" to create one.</div>
+      )}
+
+      {showAdd && (
+        <div className="modal-overlay" onMouseDown={() => !creating && setShowAdd(false)}>
+          <form
+            className="modal-card"
+            onMouseDown={(e) => e.stopPropagation()}
+            onSubmit={create}
+          >
+            <h3 className="modal-title">Add a server</h3>
+            <label className="field">
+              Name
+              <input
+                autoFocus
+                value={newName}
+                placeholder="My Server"
+                onChange={(e) => setNewName(e.target.value)}
+              />
+            </label>
+            <label className="field">
+              Version
+              <select value={newVersion} onChange={(e) => setNewVersion(e.target.value)}>
+                {versions.map((v) => (
+                  <option key={`${v.channel}-${v.version}`} value={v.version}>
+                    {v.version} {v.channel === "unstable" ? "(unstable)" : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              Port (optional)
+              <input
+                value={newPort}
+                placeholder="auto"
+                inputMode="numeric"
+                onChange={(e) => setNewPort(e.target.value)}
+              />
+            </label>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn-ghost"
+                disabled={creating}
+                onClick={() => setShowAdd(false)}
+              >
+                Cancel
+              </button>
+              <button type="submit" disabled={creating || !newName.trim() || !newVersion}>
+                {creating ? "Creating…" : "Create"}
+              </button>
+            </div>
+          </form>
         </div>
-      </form>
+      )}
 
       {pendingDelete && (
         <ConfirmDialog
