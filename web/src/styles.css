@@ -269,3 +269,155 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 }
+
+/* Server selector in the top bar */
+.server-select {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.server-select select {
+  padding: 0.35rem 0.5rem;
+}
+
+/* Tabs */
+.tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+.tab {
+  background: transparent;
+  color: var(--muted);
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding: 0.6rem 1rem;
+  font-weight: 600;
+}
+.tab:hover:not(:disabled) {
+  background: transparent;
+  color: var(--text);
+}
+.tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* Servers tab */
+.server-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+.server-card {
+  padding: 1rem;
+}
+.server-card.selected {
+  border-color: var(--accent);
+}
+.server-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+.add-server {
+  padding: 1rem;
+}
+.add-server-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+}
+.add-server-row .field {
+  margin: 0;
+  flex: 1;
+  min-width: 140px;
+}
+
+/* Console tab */
+.console-tab {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  gap: 1.25rem;
+  align-items: start;
+}
+.console-main {
+  padding: 1rem;
+}
+.compose {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+.compose-input {
+  flex: 1;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.compose-args {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.6rem;
+}
+.field.inline {
+  flex-direction: column;
+  margin: 0;
+  min-width: 140px;
+}
+
+/* Command palette */
+.command-palette {
+  padding: 1rem;
+  max-height: 620px;
+  overflow-y: auto;
+}
+.command-group {
+  margin-bottom: 0.75rem;
+}
+.command-group-label {
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin: 0.5rem 0 0.35rem;
+}
+.command-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  width: 100%;
+  text-align: left;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.45rem 0.6rem;
+  margin-bottom: 0.35rem;
+  font-weight: 500;
+}
+.command-item:hover:not(:disabled) {
+  background: #222a37;
+  border-color: var(--accent);
+}
+.command-item.active {
+  border-color: var(--accent);
+}
+.command-label {
+  font-weight: 600;
+}
+.command-template {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+@media (max-width: 860px) {
+  .console-tab {
+    grid-template-columns: 1fr;
+  }
+}

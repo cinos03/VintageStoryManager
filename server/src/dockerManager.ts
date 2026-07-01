@@ -3,6 +3,7 @@ import { EventEmitter } from "node:events";
 import type { Duplex } from "node:stream";
 import { config } from "./config";
 import { log } from "./logger";
+import type { ServerConfig } from "./db";
 
 export type ServerState = "running" | "stopped" | "not-created" | "starting";
 
@@ -15,19 +16,28 @@ export interface ServerStatus {
 }
 
 const MAX_BUFFER_BYTES = 256 * 1024;
+const docker = new Docker();
 
 /**
  * Controls a single Vintage Story dedicated-server container via the Docker API.
  * Streams the server console (stdout/stderr) and forwards typed commands to stdin.
+ * One instance exists per managed server.
  */
-class DockerManager extends EventEmitter {
-  private docker = new Docker();
+export class ServerRunner extends EventEmitter {
+  readonly id: string;
+  private containerName: string;
   private attachStream: Duplex | null = null;
   private outputBuffer: Buffer[] = [];
   private outputBytes = 0;
 
+  constructor(server: ServerConfig) {
+    super();
+    this.id = server.id;
+    this.containerName = server.containerName;
+  }
+
   private getContainer(): Docker.Container {
-    return this.docker.getContainer(config.vs.containerName);
+    return docker.getContainer(this.containerName);
   }
 
   /** Reconnect to an already-running container after a manager restart. */
@@ -35,7 +45,7 @@ class DockerManager extends EventEmitter {
     try {
       const info = await this.getContainer().inspect();
       if (info.State.Running) {
-        log.info("Found running game container; re-attaching console.");
+        log.info(`[${this.id}] Found running container; re-attaching console.`);
         await this.attachConsole();
       }
     } catch {
@@ -47,12 +57,10 @@ class DockerManager extends EventEmitter {
     try {
       const info = await this.getContainer().inspect();
       const env = info.Config.Env ?? [];
-      const version = this.readEnv(env, "VS_VERSION");
-      const channel = this.readEnv(env, "VS_CHANNEL");
       return {
         state: info.State.Running ? "running" : "stopped",
-        version,
-        channel,
+        version: this.readEnv(env, "VS_VERSION"),
+        channel: this.readEnv(env, "VS_CHANNEL"),
         containerId: info.Id.slice(0, 12),
         startedAt: info.State.Running ? info.State.StartedAt : null,
       };
@@ -74,34 +82,33 @@ class DockerManager extends EventEmitter {
         await container.stop({ t: 20 }).catch(() => undefined);
       }
       await container.remove({ force: true });
-      log.info("Removed existing game container.");
+      log.info(`[${this.id}] Removed existing container.`);
     } catch {
       /* nothing to remove */
     }
   }
 
   /** (Re)creates and starts the game container for the requested version. */
-  async start(version: string, channel: string): Promise<void> {
-    if (!config.hostDataDir || !config.hostGameDir) {
+  async start(server: ServerConfig, version: string, channel: string): Promise<void> {
+    if (!server.hostDataDir || !config.hostGameDir) {
       throw new Error(
         "HOST_DATA_DIR and HOST_GAME_DIR must be set so the game container can be given host bind mounts."
       );
     }
+    this.containerName = server.containerName;
 
     const current = await this.status();
-    // If it's already running the requested version, do nothing.
     if (current.state === "running" && current.version === version && current.channel === channel) {
       return;
     }
-    // Recreate so version/channel changes take effect cleanly.
     await this.removeIfExists();
     this.resetBuffer();
 
-    const gamePort = `${config.vs.gamePort}`;
+    const gamePort = `${server.gamePort}`;
     const createOptions: Docker.ContainerCreateOptions = {
-      name: config.vs.containerName,
+      name: server.containerName,
       Image: config.vs.image,
-      Hostname: config.vs.containerName,
+      Hostname: server.containerName,
       Env: [`VS_VERSION=${version}`, `VS_CHANNEL=${channel}`],
       Tty: true,
       OpenStdin: true,
@@ -114,7 +121,7 @@ class DockerManager extends EventEmitter {
         [`${gamePort}/udp`]: {},
       },
       HostConfig: {
-        Binds: [`${config.hostDataDir}:/data`, `${config.hostGameDir}:/game`],
+        Binds: [`${server.hostDataDir}:/data`, `${config.hostGameDir}:/game`],
         PortBindings: {
           [`${gamePort}/tcp`]: [{ HostPort: gamePort }],
           [`${gamePort}/udp`]: [{ HostPort: gamePort }],
@@ -124,8 +131,8 @@ class DockerManager extends EventEmitter {
       },
     };
 
-    log.info(`Creating game container for version ${version} (${channel})...`);
-    const container = await this.docker.createContainer(createOptions);
+    log.info(`[${this.id}] Creating container for version ${version} (${channel}) on port ${gamePort}...`);
+    const container = await docker.createContainer(createOptions);
 
     // Attach before start so we capture the full boot log.
     const stream = (await container.attach({
@@ -138,14 +145,13 @@ class DockerManager extends EventEmitter {
     this.bindStream(stream);
 
     await container.start();
-    log.info("Game container started.");
+    log.info(`[${this.id}] Container started.`);
     this.emit("status");
   }
 
   async stop(): Promise<void> {
     const current = await this.status();
     if (current.state !== "running") return;
-    // Ask the server to save & shut down gracefully first.
     try {
       this.writeToStream("/stop\n");
     } catch {
@@ -154,24 +160,30 @@ class DockerManager extends EventEmitter {
     try {
       await this.getContainer().stop({ t: 25 });
     } catch (err) {
-      log.warn("Graceful stop failed, forcing:", err);
+      log.warn(`[${this.id}] Graceful stop failed, forcing:`, err);
       await this.getContainer().kill().catch(() => undefined);
     }
     this.detachStream();
     this.emit("status");
   }
 
-  async restart(): Promise<void> {
+  async restart(server: ServerConfig): Promise<void> {
     const current = await this.status();
-    const version = current.version ?? config.vs.defaultVersion;
-    const channel = current.channel ?? config.vs.defaultChannel;
+    const version = current.version ?? server.version;
+    const channel = current.channel ?? server.channel;
     await this.stop();
-    await this.start(version, channel);
+    await this.start(server, version, channel);
+  }
+
+  /** Stops and removes the container (used when deleting a server). */
+  async destroy(): Promise<void> {
+    await this.removeIfExists();
+    this.detachStream();
+    this.resetBuffer();
   }
 
   private async attachConsole(): Promise<void> {
-    const container = this.getContainer();
-    const stream = (await container.attach({
+    const stream = (await this.getContainer().attach({
       stream: true,
       stdin: true,
       stdout: true,
@@ -185,7 +197,7 @@ class DockerManager extends EventEmitter {
     this.detachStream();
     this.attachStream = stream;
     stream.on("data", (chunk: Buffer) => this.pushOutput(chunk));
-    stream.on("error", (err) => log.warn("Console stream error:", err));
+    stream.on("error", (err) => log.warn(`[${this.id}] Console stream error:`, err));
     stream.on("end", () => {
       this.attachStream = null;
       this.emit("status");
@@ -237,4 +249,37 @@ class DockerManager extends EventEmitter {
   }
 }
 
-export const dockerManager = new DockerManager();
+/** Owns one ServerRunner per managed server, keyed by server id. */
+class ServerRegistry {
+  private runners = new Map<string, ServerRunner>();
+
+  get(server: ServerConfig): ServerRunner {
+    let runner = this.runners.get(server.id);
+    if (!runner) {
+      runner = new ServerRunner(server);
+      this.runners.set(server.id, runner);
+    }
+    return runner;
+  }
+
+  /** Existing runner by id (no creation) — used by the WebSocket layer. */
+  peek(id: string): ServerRunner | undefined {
+    return this.runners.get(id);
+  }
+
+  async initAll(servers: ServerConfig[]): Promise<void> {
+    for (const server of servers) {
+      await this.get(server).init();
+    }
+  }
+
+  async remove(server: ServerConfig): Promise<void> {
+    const runner = this.get(server);
+    await runner.destroy();
+    runner.removeAllListeners();
+    this.runners.delete(server.id);
+  }
+}
+
+export const registry = new ServerRegistry();
+

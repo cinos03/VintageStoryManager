@@ -5,18 +5,18 @@ import express from "express";
 import cookieParser from "cookie-parser";
 import { config } from "./config";
 import { log } from "./logger";
-import { loadStore } from "./db";
-import { dockerManager } from "./dockerManager";
+import { loadStore, listServers } from "./db";
+import { registry } from "./dockerManager";
 import { attachConsoleWebSocket } from "./ws";
 import { authRouter } from "./routes/auth";
-import { serverRouter } from "./routes/server";
+import { serversRouter } from "./routes/server";
 import { versionsRouter } from "./routes/versions";
-import { modsRouter } from "./routes/mods";
-import { consoleRouter } from "./routes/console";
+import { commandsRouter } from "./routes/commands";
 
 async function main(): Promise<void> {
   loadStore();
-  await dockerManager.init();
+  // Reattach consoles for any containers already running.
+  await registry.initAll(listServers());
 
   const app = express();
   app.use(express.json({ limit: "1mb" }));
@@ -24,10 +24,9 @@ async function main(): Promise<void> {
 
   app.get("/api/health", (_req, res) => res.json({ ok: true }));
   app.use("/api/auth", authRouter);
-  app.use("/api/server", serverRouter);
+  app.use("/api/servers", serversRouter);
   app.use("/api/versions", versionsRouter);
-  app.use("/api/mods", modsRouter);
-  app.use("/api/console", consoleRouter);
+  app.use("/api/commands", commandsRouter);
 
   // Serve the built frontend (SPA) if present.
   const publicDir = process.env.PUBLIC_DIR ?? path.join(__dirname, "..", "public");

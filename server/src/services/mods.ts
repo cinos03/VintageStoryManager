@@ -1,7 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
 import AdmZip from "adm-zip";
-import { config } from "../config";
 import { log } from "../logger";
 import { getBestRelease } from "./moddb";
 
@@ -16,9 +15,9 @@ export interface InstalledMod {
   sizeBytes: number;
 }
 
-function ensureModsDir(): string {
-  fs.mkdirSync(config.modsDir, { recursive: true });
-  return config.modsDir;
+function ensureModsDir(modsDir: string): string {
+  fs.mkdirSync(modsDir, { recursive: true });
+  return modsDir;
 }
 
 /** Lenient JSON parse: strips BOM, // and /* *​/ comments and trailing commas. */
@@ -67,8 +66,8 @@ function readModInfoFromZip(filePath: string): Partial<InstalledMod> {
   }
 }
 
-export function listInstalledMods(): InstalledMod[] {
-  const dir = ensureModsDir();
+export function listInstalledMods(modsDir: string): InstalledMod[] {
+  const dir = ensureModsDir(modsDir);
   const files = fs.readdirSync(dir).filter((f) => /\.(zip|cs|dll)$/i.test(f));
   return files.map((file) => {
     const full = path.join(dir, file);
@@ -92,10 +91,11 @@ function sanitizeFileName(name: string): string {
 }
 
 export async function installModFromDb(
+  modsDir: string,
   modId: number,
   gameVersion?: string
 ): Promise<InstalledMod> {
-  const dir = ensureModsDir();
+  const dir = ensureModsDir(modsDir);
   const release = await getBestRelease(modId, gameVersion);
   const res = await fetch(release.fileUrl);
   if (!res.ok) throw new Error(`Download failed (${res.status}) for ${release.fileUrl}`);
@@ -103,22 +103,26 @@ export async function installModFromDb(
   const target = path.join(dir, sanitizeFileName(release.fileName));
   fs.writeFileSync(target, buffer);
   log.info(`Installed mod ${release.modIdStr} ${release.version} -> ${path.basename(target)}`);
-  return listInstalledMods().find((m) => m.file === path.basename(target))!;
+  return listInstalledMods(modsDir).find((m) => m.file === path.basename(target))!;
 }
 
-export function installModFromUpload(originalName: string, buffer: Buffer): InstalledMod {
-  const dir = ensureModsDir();
+export function installModFromUpload(
+  modsDir: string,
+  originalName: string,
+  buffer: Buffer
+): InstalledMod {
+  const dir = ensureModsDir(modsDir);
   if (!/\.(zip|cs|dll)$/i.test(originalName)) {
     throw new Error("Only .zip, .cs or .dll mod files are supported.");
   }
   const target = path.join(dir, sanitizeFileName(originalName));
   fs.writeFileSync(target, buffer);
   log.info(`Imported uploaded mod -> ${path.basename(target)}`);
-  return listInstalledMods().find((m) => m.file === path.basename(target))!;
+  return listInstalledMods(modsDir).find((m) => m.file === path.basename(target))!;
 }
 
-export function deleteMod(file: string): void {
-  const dir = ensureModsDir();
+export function deleteMod(modsDir: string, file: string): void {
+  const dir = ensureModsDir(modsDir);
   const target = path.join(dir, path.basename(file));
   if (!target.startsWith(dir)) throw new Error("Invalid path.");
   if (fs.existsSync(target)) fs.unlinkSync(target);

@@ -1,7 +1,8 @@
 import type { Server as HttpServer } from "node:http";
 import { WebSocketServer, WebSocket } from "ws";
 import { verifyToken } from "./auth";
-import { dockerManager } from "./dockerManager";
+import { registry } from "./dockerManager";
+import { getServer } from "./db";
 import { log } from "./logger";
 
 function parseCookies(header: string | undefined): Record<string, string> {
@@ -15,14 +16,17 @@ function parseCookies(header: string | undefined): Record<string, string> {
   return out;
 }
 
+function query(url: string | undefined): URLSearchParams {
+  return new URLSearchParams((url ?? "").split("?")[1] ?? "");
+}
+
 function authorize(url: string | undefined, cookieHeader: string | undefined): boolean {
   // Token may arrive as a cookie or as a ?token= query param (for browsers that
   // can't set headers on the WebSocket handshake).
   const cookies = parseCookies(cookieHeader);
   let token = cookies.token;
   if (!token && url) {
-    const q = new URLSearchParams(url.split("?")[1] ?? "");
-    token = q.get("token") ?? "";
+    token = query(url).get("token") ?? "";
   }
   return !!token && !!verifyToken(token);
 }
@@ -36,20 +40,30 @@ export function attachConsoleWebSocket(server: HttpServer): void {
       return;
     }
 
+    // Which server's console to attach to.
+    const serverId = query(req.url).get("server") ?? "";
+    const target = getServer(serverId);
+    if (!target) {
+      ws.send(`\r\n[manager] Unknown server "${serverId}"\r\n`);
+      ws.close(4404, "Unknown server");
+      return;
+    }
+    const runner = registry.get(target);
+
     // Hydrate the terminal with recent output.
-    const buffered = dockerManager.getBufferedOutput();
+    const buffered = runner.getBufferedOutput();
     if (buffered.length) ws.send(buffered.toString("utf8"));
 
     const onData = (chunk: Buffer) => {
       if (ws.readyState === WebSocket.OPEN) ws.send(chunk.toString("utf8"));
     };
-    dockerManager.on("data", onData);
+    runner.on("data", onData);
 
     ws.on("message", (raw) => {
       // Incoming messages are raw keystrokes / commands typed in the terminal.
       const text = raw.toString();
       try {
-        dockerManager.sendCommand(text.replace(/\r?\n$/, ""));
+        runner.sendCommand(text.replace(/\r?\n$/, ""));
       } catch (err) {
         if (ws.readyState === WebSocket.OPEN) {
           ws.send(`\r\n[manager] ${(err as Error).message}\r\n`);
@@ -57,7 +71,7 @@ export function attachConsoleWebSocket(server: HttpServer): void {
       }
     });
 
-    ws.on("close", () => dockerManager.off("data", onData));
+    ws.on("close", () => runner.off("data", onData));
     ws.on("error", (err) => log.warn("console ws error:", err));
   });
 

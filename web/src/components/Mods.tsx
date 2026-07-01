@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, type InstalledMod, type ModSummary, type ServerStatus } from "../api";
+import { api, type InstalledMod, type ModSummary, type ServerInfo } from "../api";
 
-export function Mods({ status }: { status: ServerStatus | null }) {
+export function Mods({ server }: { server: ServerInfo | null }) {
   const [installed, setInstalled] = useState<InstalledMod[]>([]);
   const [results, setResults] = useState<ModSummary[]>([]);
   const [query, setQuery] = useState("");
@@ -10,25 +10,32 @@ export function Mods({ status }: { status: ServerStatus | null }) {
   const [error, setError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const gv = status?.settings?.version;
+  const serverId = server?.id ?? null;
+  const gv = server?.version;
 
   const loadInstalled = useCallback(() => {
-    api
-      .installedMods()
+    if (!serverId) {
+      setInstalled([]);
+      return;
+    }
+    api.mods
+      .installed(serverId)
       .then((r) => setInstalled(r.mods))
       .catch((e) => setError((e as Error).message));
-  }, []);
+  }, [serverId]);
 
   useEffect(() => {
+    setResults([]);
     loadInstalled();
   }, [loadInstalled]);
 
   const search = async (e?: React.FormEvent) => {
     e?.preventDefault();
+    if (!serverId) return;
     setSearching(true);
     setError("");
     try {
-      const r = await api.searchMods(query, gv);
+      const r = await api.mods.search(serverId, query, gv);
       setResults(r.mods);
     } catch (err) {
       setError((err as Error).message);
@@ -38,10 +45,11 @@ export function Mods({ status }: { status: ServerStatus | null }) {
   };
 
   const install = async (mod: ModSummary) => {
+    if (!serverId) return;
     setBusyId(mod.modId);
     setError("");
     try {
-      await api.installMod(mod.modId, gv);
+      await api.mods.install(serverId, mod.modId, gv);
       loadInstalled();
     } catch (err) {
       setError((err as Error).message);
@@ -52,10 +60,10 @@ export function Mods({ status }: { status: ServerStatus | null }) {
 
   const upload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || !serverId) return;
     setError("");
     try {
-      await api.uploadMod(file);
+      await api.mods.upload(serverId, file);
       loadInstalled();
     } catch (err) {
       setError((err as Error).message);
@@ -65,18 +73,23 @@ export function Mods({ status }: { status: ServerStatus | null }) {
   };
 
   const remove = async (file: string) => {
+    if (!serverId) return;
     if (!confirm(`Remove ${file}?`)) return;
     try {
-      await api.deleteMod(file);
+      await api.mods.remove(serverId, file);
       loadInstalled();
     } catch (err) {
       setError((err as Error).message);
     }
   };
 
+  if (!server) {
+    return <div className="muted">Select or create a server to manage its mods.</div>;
+  }
+
   return (
-    <div className="mods">
-      <h2>Mods</h2>
+    <div className="mods panel">
+      <h2>Mods — {server.name}</h2>
       {error && <div className="error">{error}</div>}
 
       <div className="mods-cols">
