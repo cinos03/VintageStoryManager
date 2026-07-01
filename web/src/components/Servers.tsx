@@ -9,6 +9,20 @@ const STATE_LABEL: Record<ServerStatus["state"], string> = {
   starting: "Starting…",
 };
 
+/** Human-readable uptime from an ISO start timestamp. */
+function formatUptime(startedAt?: string | null): string {
+  if (!startedAt) return "—";
+  const ms = Date.now() - new Date(startedAt).getTime();
+  if (ms < 0 || Number.isNaN(ms)) return "—";
+  const s = Math.floor(ms / 1000);
+  const d = Math.floor(s / 86400);
+  const h = Math.floor((s % 86400) / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  if (d > 0) return `${d}d ${h}h ${m}m`;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
 export function Servers({
   servers,
   onChange,
@@ -137,6 +151,23 @@ export function Servers({
                   {s.status.version ? ` · ${s.status.version}` : ""}
                 </span>
               </div>
+
+              {running && (
+                <div className="server-stats">
+                  <div className="stat">
+                    <span className="stat-value">{formatUptime(s.status.startedAt)}</span>
+                    <span className="stat-label">Uptime</span>
+                  </div>
+                  <div className="stat">
+                    <span className="stat-value">{s.status.players?.online ?? 0}</span>
+                    <span className="stat-label">Players</span>
+                  </div>
+                  <div className="stat">
+                    <span className="stat-value">{s.status.players?.peak ?? 0}</span>
+                    <span className="stat-label">Peak</span>
+                  </div>
+                </div>
+              )}
 
               <label className="field">
                 Version

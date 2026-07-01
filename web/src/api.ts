@@ -7,6 +7,11 @@ export interface ServerStatus {
   channel?: string | null;
   containerId?: string | null;
   startedAt?: string | null;
+  players?: {
+    online: number;
+    peak: number;
+    names: string[];
+  };
 }
 
 /** A managed server record plus its live container status. */
@@ -133,6 +138,15 @@ export const api = {
     stop: (id: string) => req<ServerStatus>(`/api/servers/${enc(id)}/stop`, { method: "POST" }),
     restart: (id: string) =>
       req<ServerStatus>(`/api/servers/${enc(id)}/restart`, { method: "POST" }),
+    getConfig: (id: string) =>
+      req<{ exists: boolean; config: Record<string, unknown> }>(
+        `/api/servers/${enc(id)}/config`
+      ),
+    saveConfig: (id: string, config: Record<string, unknown>, restart: boolean) =>
+      req<{ ok: true; restarted: boolean }>(`/api/servers/${enc(id)}/config`, {
+        method: "PUT",
+        body: JSON.stringify({ config, restart }),
+      }),
   },
 
   mods: {

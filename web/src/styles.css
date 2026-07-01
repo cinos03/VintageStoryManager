@@ -331,6 +331,33 @@ button:disabled {
   gap: 0.75rem;
   margin-bottom: 0.5rem;
 }
+.server-stats {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0.25rem 0 0.75rem;
+}
+.stat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.45rem 0.3rem;
+}
+.stat-value {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+}
+.stat-label {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
 .add-server {
   padding: 1rem;
 }
@@ -460,4 +487,76 @@ button:disabled {
   display: flex;
   justify-content: flex-end;
   gap: 0.6rem;
+}
+
+/* Notice banner */
+.notice {
+  background: rgba(217, 130, 43, 0.12);
+  border: 1px solid var(--accent);
+  color: var(--accent-hover);
+  border-radius: 8px;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.85rem;
+  margin-bottom: 0.75rem;
+}
+
+/* Config page */
+.config-page {
+  max-width: 900px;
+}
+.config-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+.config-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.9rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.1rem;
+}
+.config-grid .field {
+  margin: 0;
+}
+.config-grid .span-2 {
+  grid-column: 1 / -1;
+}
+.config-raw {
+  margin-top: 1.25rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem 1.1rem;
+}
+.config-raw summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.config-textarea {
+  width: 100%;
+  min-height: 320px;
+  margin-top: 0.5rem;
+  background: #0d1117;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.7rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.82rem;
+  resize: vertical;
+}
+.config-textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+@media (max-width: 720px) {
+  .config-grid {
+    grid-template-columns: 1fr;
+  }
 }

@@ -10,6 +10,7 @@ import {
   removeServer,
 } from "../db";
 import { config } from "../config";
+import { readServerConfig, writeServerConfig } from "../services/serverconfig";
 import { modsRouter } from "./mods";
 import { consoleRouter } from "./console";
 
@@ -109,6 +110,49 @@ serversRouter.post("/:id/restart", async (req: Request, res: Response) => {
     const runner = registry.get(server);
     await runner.restart(server);
     res.json({ ok: true, ...(await runner.status()) });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+// --- serverconfig.json ---
+
+serversRouter.get("/:id/config", async (req: Request, res: Response) => {
+  const server = getServer(req.params.id);
+  if (!server) return res.status(404).json({ error: `No server "${req.params.id}"` });
+  try {
+    const cfg = readServerConfig(server.dataDir);
+    res.json({ exists: cfg !== null, config: cfg ?? {} });
+  } catch (err) {
+    res.status(500).json({ error: `Could not read serverconfig.json: ${(err as Error).message}` });
+  }
+});
+
+serversRouter.put("/:id/config", async (req: Request, res: Response) => {
+  const server = getServer(req.params.id);
+  if (!server) return res.status(404).json({ error: `No server "${req.params.id}"` });
+  const incoming = req.body?.config;
+  if (typeof incoming !== "object" || incoming === null || Array.isArray(incoming)) {
+    return res.status(400).json({ error: "config (object) required" });
+  }
+  const restart = req.body?.restart === true;
+  try {
+    writeServerConfig(server.dataDir, incoming as Record<string, unknown>);
+    // Keep the manager's server name in sync with the config's ServerName.
+    const serverName = (incoming as Record<string, unknown>).ServerName;
+    if (typeof serverName === "string" && serverName.trim()) {
+      updateServer(server.id, { name: serverName.trim() });
+    }
+    let restarted = false;
+    if (restart) {
+      const runner = registry.get(server);
+      const status = await runner.status();
+      if (status.state === "running") {
+        await runner.restart(server);
+        restarted = true;
+      }
+    }
+    res.json({ ok: true, restarted });
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
   }

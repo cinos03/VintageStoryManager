@@ -13,6 +13,12 @@ export interface ServerStatus {
   channel: string | null;
   containerId: string | null;
   startedAt: string | null;
+  /** Live player info derived from the console stream. */
+  players: {
+    online: number;
+    peak: number;
+    names: string[];
+  };
 }
 
 const MAX_BUFFER_BYTES = 256 * 1024;
@@ -29,6 +35,10 @@ export class ServerRunner extends EventEmitter {
   private attachStream: Duplex | null = null;
   private outputBuffer: Buffer[] = [];
   private outputBytes = 0;
+  // Live player tracking, parsed from console join/leave events.
+  private online = new Set<string>();
+  private peakPlayers = 0;
+  private lineTail = "";
 
   constructor(server: ServerConfig) {
     super();
@@ -54,18 +64,33 @@ export class ServerRunner extends EventEmitter {
   }
 
   async status(): Promise<ServerStatus> {
+    const players = {
+      online: this.online.size,
+      peak: this.peakPlayers,
+      names: [...this.online],
+    };
     try {
       const info = await this.getContainer().inspect();
       const env = info.Config.Env ?? [];
+      const running = info.State.Running;
+      if (!running) this.resetPlayers();
       return {
-        state: info.State.Running ? "running" : "stopped",
+        state: running ? "running" : "stopped",
         version: this.readEnv(env, "VS_VERSION"),
         channel: this.readEnv(env, "VS_CHANNEL"),
         containerId: info.Id.slice(0, 12),
-        startedAt: info.State.Running ? info.State.StartedAt : null,
+        startedAt: running ? info.State.StartedAt : null,
+        players: running ? players : { online: 0, peak: 0, names: [] },
       };
     } catch {
-      return { state: "not-created", version: null, channel: null, containerId: null, startedAt: null };
+      return {
+        state: "not-created",
+        version: null,
+        channel: null,
+        containerId: null,
+        startedAt: null,
+        players: { online: 0, peak: 0, names: [] },
+      };
     }
   }
 
@@ -235,12 +260,50 @@ export class ServerRunner extends EventEmitter {
       const removed = this.outputBuffer.shift();
       if (removed) this.outputBytes -= removed.length;
     }
+    this.parsePlayers(chunk.toString("utf8"));
     this.emit("data", chunk);
+  }
+
+  /**
+   * Parse player join/leave lines from the console stream to keep a live count.
+   * VS server logs e.g. "... Player Bob joins." and "... Player Bob left.".
+   */
+  private parsePlayers(text: string): void {
+    this.lineTail += text;
+    const lines = this.lineTail.split(/\r?\n/);
+    // Keep the last partial line for the next chunk.
+    this.lineTail = lines.pop() ?? "";
+    let changed = false;
+    for (const line of lines) {
+      const join = line.match(/\bPlayer\s+(\S+?)\s+.*\bjoins?\b/i) ?? line.match(/\bPlayer\s+(\S+)\s+joins?\b/i);
+      const leave =
+        line.match(/\bPlayer\s+(\S+?)\s+.*\b(?:left|disconnected)\b/i) ??
+        line.match(/\bPlayer\s+(\S+)\s+(?:left|disconnected)\b/i);
+      if (join) {
+        const name = join[1].replace(/[.,]$/, "");
+        if (!this.online.has(name)) {
+          this.online.add(name);
+          if (this.online.size > this.peakPlayers) this.peakPlayers = this.online.size;
+          changed = true;
+        }
+      } else if (leave) {
+        const name = leave[1].replace(/[.,]$/, "");
+        if (this.online.delete(name)) changed = true;
+      }
+    }
+    if (changed) this.emit("status");
+  }
+
+  private resetPlayers(): void {
+    this.online.clear();
+    this.peakPlayers = 0;
+    this.lineTail = "";
   }
 
   private resetBuffer(): void {
     this.outputBuffer = [];
     this.outputBytes = 0;
+    this.resetPlayers();
   }
 
   /** Recent console output, for hydrating a newly connected terminal. */

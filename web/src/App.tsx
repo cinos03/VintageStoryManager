@@ -4,8 +4,9 @@ import { Login } from "./components/Login";
 import { Servers } from "./components/Servers";
 import { Console } from "./components/Console";
 import { Mods } from "./components/Mods";
+import { ServerConfigPage } from "./components/ServerConfigPage";
 
-type Tab = "servers" | "console" | "mods";
+type Tab = "servers" | "console" | "config" | "mods";
 
 const SELECTED_KEY = "vsm.selectedServer";
 
@@ -85,13 +86,19 @@ export function App() {
       </header>
 
       <nav className="tabs">
-        {(["servers", "console", "mods"] as Tab[]).map((t) => (
+        {(["servers", "console", "config", "mods"] as Tab[]).map((t) => (
           <button
             key={t}
             className={`tab ${tab === t ? "active" : ""}`}
             onClick={() => setTab(t)}
           >
-            {t === "servers" ? "Servers" : t === "console" ? "Console" : "Mods"}
+            {t === "servers"
+              ? "Servers"
+              : t === "console"
+                ? "Console"
+                : t === "config"
+                  ? "Config"
+                  : "Mods"}
           </button>
         ))}
       </nav>
@@ -101,6 +108,7 @@ export function App() {
           <Servers servers={servers} onChange={refreshServers} selectedId={selectedId} />
         )}
         {tab === "console" && <Console server={selected} />}
+        {tab === "config" && <ServerConfigPage server={selected} onChange={refreshServers} />}
         {tab === "mods" && <Mods server={selected} />}
       </main>
     </div>
