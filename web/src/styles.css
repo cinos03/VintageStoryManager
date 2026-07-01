@@ -511,6 +511,16 @@ button:disabled {
   gap: 1rem;
   margin-bottom: 0.75rem;
 }
+.config-section {
+  margin-bottom: 1.25rem;
+}
+.config-section-title {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  margin: 0 0 0.5rem;
+}
 .config-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -520,11 +530,44 @@ button:disabled {
   border-radius: 12px;
   padding: 1.1rem;
 }
-.config-grid .field {
-  margin: 0;
+.cfg-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  min-width: 0;
 }
-.config-grid .span-2 {
+.cfg-field.span-2 {
   grid-column: 1 / -1;
+}
+.cfg-field input,
+.cfg-field select,
+.cfg-field textarea {
+  width: 100%;
+}
+.cfg-bool {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+}
+.cfg-bool input {
+  width: auto;
+  accent-color: var(--accent);
+}
+.cfg-json {
+  min-height: 120px;
+  background: #0d1117;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.6rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.78rem;
+  resize: vertical;
+}
+.cfg-json:focus {
+  outline: none;
+  border-color: var(--accent);
 }
 .config-raw {
   margin-top: 1.25rem;
