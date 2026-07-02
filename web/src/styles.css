@@ -569,6 +569,34 @@ button:disabled {
   outline: none;
   border-color: var(--accent);
 }
+.cfg-default {
+  font-weight: 400;
+}
+.cfg-label {
+  font-size: 0.85rem;
+}
+.roles-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.35rem;
+}
+.role-card {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.85rem;
+}
+.role-card-title {
+  font-weight: 700;
+  margin-bottom: 0.6rem;
+}
+.role-card .config-grid {
+  background: transparent;
+  border: none;
+  padding: 0;
+  gap: 0.75rem;
+}
 .config-raw {
   margin-top: 1.25rem;
   background: var(--panel);

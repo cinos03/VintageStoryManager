@@ -3,6 +3,9 @@ import { api, type ServerInfo } from "../api";
 
 type Cfg = Record<string, unknown>;
 
+/** Keys that are noise in the friendly form — still editable via raw JSON. */
+const HIDDEN_KEYS = new Set(["LastLaunchMods", "ModDbUrl"]);
+
 /** Ordered display groups. First matching keyword (case-insensitive substring)
  *  wins; anything unmatched falls into "Other". Order here is display order.
  *  This only affects presentation — the saved JSON keeps its original order. */
@@ -99,14 +102,29 @@ function humanize(key: string): string {
     .trim();
 }
 
-type ValueKind = "boolean" | "number" | "string" | "null" | "json";
+/** Short, readable representation of a value for the "default:" hint. */
+function fmtDefault(v: unknown): string {
+  if (v === null || v === undefined) return "null";
+  if (typeof v === "string") return v.length > 40 ? `"${v.slice(0, 40)}…"` : `"${v}"`;
+  if (typeof v === "boolean" || typeof v === "number") return String(v);
+  const j = JSON.stringify(v);
+  return j.length > 40 ? `${j.slice(0, 40)}…` : j;
+}
 
-function kindOf(value: unknown): ValueKind {
-  if (typeof value === "boolean") return "boolean";
-  if (typeof value === "number") return "number";
-  if (typeof value === "string") return "string";
-  if (value === null) return "null";
-  return "json"; // arrays / objects
+function isStringArray(v: unknown): v is string[] {
+  return Array.isArray(v) && v.every((x) => typeof x === "string");
+}
+
+function commaSplit(text: string): string[] {
+  return text
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
+
+/** Truthy check for the various ways WhitelistMode "on" can be stored. */
+function whitelistOn(v: unknown): boolean {
+  return v === "on" || v === "On" || v === 2 || v === true;
 }
 
 export function ServerConfigPage({
@@ -117,6 +135,7 @@ export function ServerConfigPage({
   onChange: () => void;
 }) {
   const [config, setConfig] = useState<Cfg>({});
+  const [original, setOriginal] = useState<Cfg>({});
   const [raw, setRaw] = useState("{}");
   const [rawError, setRawError] = useState("");
   // Local text drafts for object/array (JSON) fields, so invalid intermediate
@@ -143,6 +162,7 @@ export function ServerConfigPage({
       .then((r) => {
         setExists(r.exists);
         setConfig(r.config);
+        setOriginal(r.config);
         setRaw(JSON.stringify(r.config, null, 2));
         setRawError("");
         setJsonDrafts({});
@@ -225,35 +245,82 @@ export function ServerConfigPage({
   const groupOrder = [...GROUPS.map((g) => g.name), "Other"];
   const grouped = new Map<string, string[]>();
   for (const key of Object.keys(config)) {
+    if (HIDDEN_KEYS.has(key)) continue;
     const cat = categoryFor(key);
     const list = grouped.get(cat) ?? [];
     list.push(key);
     grouped.set(cat, list);
   }
 
+  /** A field label with the loaded ("default") value hinted alongside. */
+  const labelWithDefault = (key: string) => (
+    <>
+      {humanize(key)}
+      {key in original && (
+        <span className="muted small cfg-default"> · default: {fmtDefault(original[key])}</span>
+      )}
+    </>
+  );
+
   const renderField = (key: string) => {
     const value = config[key];
-    const kind = kindOf(value);
 
-    if (kind === "boolean") {
+    // Whitelist mode: a simple on/off checkbox that writes the string enum.
+    if (key === "WhitelistMode") {
       return (
         <label key={key} className="cfg-field cfg-bool" title={key}>
           <input
             type="checkbox"
-            checked={value as boolean}
-            onChange={(e) => setField(key, e.target.checked)}
+            checked={whitelistOn(value)}
+            onChange={(e) => setField(key, e.target.checked ? "on" : "off")}
           />
-          <span>{humanize(key)}</span>
+          <span>{labelWithDefault(key)}</span>
         </label>
       );
     }
 
-    if (kind === "json") {
+    // Roles get a dedicated, intuitive editor.
+    if (key === "Roles" && Array.isArray(value)) {
+      return (
+        <RolesEditor key={key} roles={value} onChange={(next) => setField(key, next)} />
+      );
+    }
+
+    // Lists of strings (e.g. ModPaths) → one comma-separated line.
+    if (isStringArray(value)) {
+      return (
+        <label key={key} className="cfg-field" title={key}>
+          {labelWithDefault(key)}
+          <input
+            type="text"
+            value={value.join(", ")}
+            onChange={(e) => setField(key, commaSplit(e.target.value))}
+          />
+          <span className="muted small">Comma-separated list</span>
+        </label>
+      );
+    }
+
+    if (typeof value === "boolean") {
+      return (
+        <label key={key} className="cfg-field cfg-bool" title={key}>
+          <input
+            type="checkbox"
+            checked={value}
+            onChange={(e) => setField(key, e.target.checked)}
+          />
+          <span>{labelWithDefault(key)}</span>
+        </label>
+      );
+    }
+
+    // Objects / arrays-of-objects → JSON textarea.
+    if (value !== null && typeof value === "object") {
       const text = jsonDrafts[key] ?? JSON.stringify(value, null, 2);
       const err = jsonErrors[key];
       return (
         <label key={key} className="cfg-field span-2" title={key}>
-          {humanize(key)}
+          {labelWithDefault(key)}
           <textarea
             className="cfg-json"
             spellCheck={false}
@@ -265,13 +332,13 @@ export function ServerConfigPage({
       );
     }
 
-    if (kind === "number") {
+    if (typeof value === "number") {
       return (
         <label key={key} className="cfg-field" title={key}>
-          {humanize(key)}
+          {labelWithDefault(key)}
           <input
             type="number"
-            value={value as number}
+            value={value}
             onChange={(e) => {
               const v = e.target.value;
               setField(key, v === "" ? null : Number(v));
@@ -282,17 +349,16 @@ export function ServerConfigPage({
     }
 
     // string or null → text input
-    const isNull = kind === "null";
+    const isNull = value === null;
     return (
       <label key={key} className="cfg-field" title={key}>
-        {humanize(key)}
+        {labelWithDefault(key)}
         <input
           type="text"
           value={isNull ? "" : (value as string)}
           placeholder={isNull ? "null" : undefined}
           onChange={(e) => {
             const v = e.target.value;
-            // Keep null when the box is emptied for a field that started null.
             setField(key, v === "" && isNull ? null : v);
           }}
         />
@@ -350,7 +416,8 @@ export function ServerConfigPage({
       <details className="config-raw">
         <summary>Advanced — raw serverconfig.json</summary>
         <p className="muted small">
-          Edit the whole file directly. On valid JSON, the fields above stay in sync.
+          Edit the whole file directly, including advanced fields like Last Launch Mods and the Mod
+          DB URL. On valid JSON, the fields above stay in sync.
         </p>
         {rawError && <div className="error">Invalid JSON: {rawError}</div>}
         <textarea
@@ -386,6 +453,150 @@ export function ServerConfigPage({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Intuitive editor for the Roles array: one card per role with labelled fields. */
+function RolesEditor({
+  roles,
+  onChange,
+}: {
+  roles: unknown[];
+  onChange: (next: unknown[]) => void;
+}) {
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const updateRole = (idx: number, fieldKey: string, val: unknown) => {
+    const next = roles.map((r, i) =>
+      i === idx && r && typeof r === "object" && !Array.isArray(r)
+        ? { ...(r as Record<string, unknown>), [fieldKey]: val }
+        : r
+    );
+    onChange(next);
+  };
+
+  const renderRoleField = (idx: number, r: Record<string, unknown>, fk: string) => {
+    const value = r[fk];
+    const draftKey = `${idx}.${fk}`;
+
+    if (typeof value === "boolean") {
+      return (
+        <label key={fk} className="cfg-field cfg-bool" title={fk}>
+          <input
+            type="checkbox"
+            checked={value}
+            onChange={(e) => updateRole(idx, fk, e.target.checked)}
+          />
+          <span>{humanize(fk)}</span>
+        </label>
+      );
+    }
+    if (typeof value === "number") {
+      return (
+        <label key={fk} className="cfg-field" title={fk}>
+          {humanize(fk)}
+          <input
+            type="number"
+            value={value}
+            onChange={(e) =>
+              updateRole(idx, fk, e.target.value === "" ? null : Number(e.target.value))
+            }
+          />
+        </label>
+      );
+    }
+    if (isStringArray(value)) {
+      return (
+        <label key={fk} className="cfg-field span-2" title={fk}>
+          {humanize(fk)}
+          <input
+            type="text"
+            value={value.join(", ")}
+            onChange={(e) => updateRole(idx, fk, commaSplit(e.target.value))}
+          />
+          <span className="muted small">Comma-separated list</span>
+        </label>
+      );
+    }
+    if (value !== null && typeof value === "object") {
+      const text = drafts[draftKey] ?? JSON.stringify(value, null, 2);
+      const err = errors[draftKey];
+      return (
+        <label key={fk} className="cfg-field span-2" title={fk}>
+          {humanize(fk)}
+          <textarea
+            className="cfg-json"
+            spellCheck={false}
+            value={text}
+            onChange={(e) => {
+              const t = e.target.value;
+              setDrafts((d) => ({ ...d, [draftKey]: t }));
+              try {
+                const p = JSON.parse(t);
+                setErrors((x) => {
+                  const n = { ...x };
+                  delete n[draftKey];
+                  return n;
+                });
+                updateRole(idx, fk, p);
+              } catch (er) {
+                setErrors((x) => ({ ...x, [draftKey]: (er as Error).message }));
+              }
+            }}
+          />
+          {err && <span className="error small">Invalid JSON: {err}</span>}
+        </label>
+      );
+    }
+    const isNull = value === null;
+    return (
+      <label key={fk} className="cfg-field" title={fk}>
+        {humanize(fk)}
+        <input
+          type="text"
+          value={isNull ? "" : String(value)}
+          placeholder={isNull ? "null" : undefined}
+          onChange={(e) => {
+            const v = e.target.value;
+            updateRole(idx, fk, v === "" && isNull ? null : v);
+          }}
+        />
+      </label>
+    );
+  };
+
+  return (
+    <div className="cfg-field span-2">
+      <span className="cfg-label">Roles</span>
+      <div className="roles-list">
+        {roles.map((role, idx) => {
+          if (!role || typeof role !== "object" || Array.isArray(role)) {
+            return (
+              <div key={idx} className="role-card">
+                <div className="role-card-title muted">Role {idx + 1}</div>
+                <textarea
+                  className="cfg-json"
+                  spellCheck={false}
+                  value={JSON.stringify(role, null, 2)}
+                  readOnly
+                />
+              </div>
+            );
+          }
+          const r = role as Record<string, unknown>;
+          const title = (r.Name as string) || (r.Code as string) || `Role ${idx + 1}`;
+          return (
+            <div key={idx} className="role-card">
+              <div className="role-card-title">{title}</div>
+              <div className="config-grid">
+                {Object.keys(r).map((fk) => renderRoleField(idx, r, fk))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
